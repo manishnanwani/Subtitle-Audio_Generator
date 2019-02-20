@@ -4,6 +4,6 @@ This particular use case is for extracting the audio from a movie, and splitting
 
 The main aim for this application is to prepare a dataset of movie audios, having the audio partitions as the individual data points, and with the associated subtitle as its label/tag. 
 
-There are a total of 2 scripts.
-  The first script is targetted for movies, having subtitles and the film for just that 1 movie.
-  The second script is targetted for web series, which can have multiple seasons, and each season has multiple episodes.
+There are a total of 2 scripts:- <br />
+1. The first script is targetted for movies, having subtitles and the film for just that 1 movie. <br />
+2. The second script is targetted for web series, which can have multiple seasons, and each season has multiple episodes.
