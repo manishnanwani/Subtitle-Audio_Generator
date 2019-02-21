@@ -5,46 +5,58 @@ import numpy as np
 import re
 import moviepy.editor as mp
 from bs4 import BeautifulSoup
+import subprocess
 
 source_path = '/home/manish/movie_data'
-
 ## Pre-processing for F.R.I.E.N.D.S. :
 ## output of this will be, for every season, there will be an episode directory consisting of
 ## the subtitle file and the episode video.
 series_name = 'Friends'
 seasons = glob.glob(os.path.join(source_path,series_name+'*'))
-for season in seasons:
+for i,season in enumerate(seasons):
+    # print(i, '\t', season)
     try:
-        os.rename(season,re.findall(r'(.*) COMPLETE 720p',season)[0])
+        os.rename(season,re.findall(r'(.*) Complete 720p',season)[0].replace(' ','_'))
         ## replacing white spaces with underscores
         # os.rename(season,season.replace(' ','_'))
     except:
         print('Filename already changed')
         
-    subtitle_file_season = os.path.join(season,'english subtitles')
-    for episodes in glob.glob(os.path.join(season,'*.mkv')):
+## This block of code re-arranges the all the directories such that, for every season, and for every episode,
+## the video file and subtitle file are in a single directory together.
+seasons = glob.glob(os.path.join(source_path,series_name+'*'))
+for i,season in enumerate(seasons):
+    # print(i, '\t', season)
+    subtitle_file_season = os.path.join(season,'subtitles')
+    for j,episodes in enumerate(glob.glob(os.path.join(season,'*.mkv'))):
+        # print(j, '\t', episodes)
         ep_video = os.path.basename(episodes)
-        ep_name = re.findall(r'friends_(.*)_720p_',ep_video)[0]
-        subtitle_name = [x for x in glob.glob(os.path.join(subtitle_file_season,'*.srt')) if re.findall('friends.'+ep_name+'.720p..*',x)][0]
+        ep_name = re.findall(r'friends[._](.*)[._]720p',ep_video)[0]
+        ep_name = ep_name.lower()
+        subtitle_name = [x for x in glob.glob(os.path.join(subtitle_file_season,'*.srt')) if re.findall('friends.'+ep_name+'.720p..*',x.lower())][0]
         subtitle_fname = os.path.basename(subtitle_name)
         os.mkdir(os.path.join(season,ep_name))
         os.rename(episodes,os.path.join(season,ep_name+'/'+ep_video))
         os.rename(subtitle_name,os.path.join(season,ep_name+'/'+subtitle_fname))
-        os.rmdir(subtitle_file_season)
-#########        
-        
-for i,season in enumerate(seasons):
-    print('Currently doing season number {0}. {1}'. format(i,season))
-    orig_filepath = os.path.join(source_path,season)
+    os.rmdir(subtitle_file_season)
     
-    episode_folders = os.walk(os.path.join(source_path,season)).__next__()[1]
+##########################################
+
+
+
+#### with ffmpeg
+for i,season in enumerate(seasons):
+    print('Currently doing season number {0}. {1}'.format(i,os.path.basename(season)))
+    orig_filepath = os.path.join(source_path,season)
+    episode_folders = [os.path.join(source_path,season,x) for x in os.listdir(os.path.join(source_path,season)) if os.path.isdir(os.path.join(source_path,season,x))]
+    # episode_folders = os.walk(os.path.join(source_path,season)).__next__()[1]
     for j,episode in enumerate(episode_folders):
+        print('Currently doing episode number {0}. {1}'.format(j,os.path.basename(episode)))
         filepath = os.path.join(orig_filepath,episode)
-        print('Currently doing episode number {0}. {1}'.format(j,episode))
-        subtitle_file = glob.glob(os.path.join(os.path.join(filepath,episode),'*srt'))
-        video_file = (glob.glob(os.path.join(os.path.join(filepath,episode),'*.mkv')) or glob.glob(os.path.join(os.path.join(filepath,episode),'*.mp4'))
-                     glob.glob(os.path.join(os.path.join(filepath,episode),'*.avi')))
-        audio_file = glob.glob(os.path.join(os.path.join(filepath,episode),'*.wav'))
+        subtitle_file = glob.glob(os.path.join(filepath,'*srt'))
+        video_file = (glob.glob(os.path.join(filepath,'*.mkv')) or glob.glob(os.path.join(filepath,'*.mp4')) or 
+                     glob.glob(os.path.join(filepath,'*.avi')))
+        audio_file = glob.glob(os.path.join(filepath,'*.wav'))
         source_flag = None
         html_flag = None
         multiple_sources = None
@@ -89,6 +101,12 @@ for i,season in enumerate(seasons):
         else:
             print("No subtitles found for this.")
 
+
+        ## convert video to audio
+        output_audio_file = os.path.join(filepath,re.findall(r'(.*).mkv',os.path.basename(video_file))[0]+'.wav')
+        command = "ffmpeg -i " +video_file+" -ab 160k -ac 2 -ar 44100 -vn "+output_audio_file
+        subprocess.call(command, shell=True)
+
         with open(subtitle_file,'r',errors='ignore') as f:
             orig = f.readlines()
 
@@ -106,8 +124,9 @@ for i,season in enumerate(seasons):
         final_list=[]
         columns = ['Sr_No','Start_time','End_time','Text']
 
+        ep = os.path.basename(episode)
         for j,subtitle in enumerate(subtitles):
-            print("Total subtitles text processed till now -->{0}/{1}".format(j,len(subtitles),end='\r'))
+            print("Total subtitles text processed till now -->{0}/{1}".format(j,len(subtitles)),end = '\r')
             #### For the subtitles extracting text, and the start and end time ####
             ## to check for valid subtitle block
             try:
@@ -155,12 +174,8 @@ for i,season in enumerate(seasons):
                 f.write(sr_no+'\t'+sub_text)
                 f.write('\n')
 
-            if source_flag == 'video':
-                ## for .mkv file:
-                clip = mp.VideoFileClip(video_file).subclip(start_time,end_time)
-                clip.audio.write_audiofile(output_path+'/'+sr_no+'_'+movie+'_'+str(start_raw.split(',')[0])+'--'+str(end_raw.split(',')[0])+'.wav')
 
-            if source_flag == 'audio':
-                ## for .wav present:
-                clip = mp.AudioFileClip(audio_file).subclip(start_time,end_time)
-                clip.write_audiofile(output_path+'/'+sr_no+'_'+movie+'_'+str(start_raw.split(',')[0])+'--'+str(end_raw.split(',')[0])+'.wav')
+            ## clips audio between start_time and end_time
+            final_op = output_path+'/'+sr_no+'_'+ep+'_'+str(start_raw.split(',')[0])+'--'+str(end_raw.split(',')[0])+'.wav'
+            command2 = "ffmpeg -i "+output_audio_file+" -ss "+str(start_time)+" -to "+str(end_time)+" -c copy "+final_op
+            subprocess.call(command2, shell=True)
